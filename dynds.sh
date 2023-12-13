@@ -7,6 +7,7 @@ if [ -f "$CONFIG_FILE" ]; then
 
     echo "debug: $CONFIG_FILE exists"
 
+    # Check IPv4
     if [ $STACK == "v4" ] || [ $STACK == "DS" ]; then
 
         CURRENT_IPV4="$(curl -4 -s ifconfig.io)"
@@ -24,6 +25,7 @@ if [ -f "$CONFIG_FILE" ]; then
         fi
     fi
 
+    # Check IPv6
     if [ $STACK == "v6" ] || [ $STACK == "DS" ]; then
 
         CURRENT_IPV6="$(curl -6 -s ifconfig.io)"
@@ -41,6 +43,7 @@ if [ -f "$CONFIG_FILE" ]; then
         fi
     fi
 
+    # Update DNS
     if [ $STACK == "v4" ] && [ $UPDATE_IPV4 == true ]; then
 
         RESULT="$(curl --silent --show-error "https://$DOMAIN:$PASSWORD@dyndns.strato.com/nic/update?hostname=$SUBDOMAIN.$DOMAIN&myip=$CURRENT_IPV4")"
@@ -63,9 +66,18 @@ if [ -f "$CONFIG_FILE" ]; then
     fi
 
 else
-    touch /etc/dynds.conf
 
     clear
+
+    # Check if the user has read and write authorisation for the configuration file
+    if ! [ -r "/etc" ] || ! [ -w "/etc" ]; then
+        echo "Error: User does not have sufficient rights to read the existing configuration file or create a new one."
+        exit 1
+    fi
+
+    # Create Config File
+    touch /etc/dynds.conf
+
     echo "Welcome to DynDS client installer!"
     echo ""
     echo "which service do you want to use?"
@@ -120,73 +132,73 @@ else
     echo ""
     echo "saving to config file now"
 
-    echo "#DynDS config created on `date`" >> $CONFIG_FILE
-    echo "" >> $CONFIG_FILE
-    echo "# set the update variables" >> $CONFIG_FILE
-    echo "CURRENT_IPV4=$(curl -4 -s ifconfig.io)" >> $CONFIG_FILE
-    echo "CURRENT_IPV6=$(curl -6 -s ifconfig.io)" >> $CONFIG_FILE
-    echo "DISCOVERED_IPV4=" >> $CONFIG_FILE
-    echo "DISCOVERED_IPV6=" >> $CONFIG_FILE
-    echo "Update_IPV4=false" >> $CONFIG_FILE
-    echo "Update_IPV6=false" >> $CONFIG_FILE
-    echo "" >> $CONFIG_FILE
+    echo "#DynDS config created on $(date)" >>$CONFIG_FILE
+    echo "" >>$CONFIG_FILE
+    echo "# set the update variables" >>$CONFIG_FILE
+    echo "CURRENT_IPV4=$(curl -4 -s ifconfig.io)" >>$CONFIG_FILE
+    echo "CURRENT_IPV6=$(curl -6 -s ifconfig.io)" >>$CONFIG_FILE
+    echo "DISCOVERED_IPV4=" >>$CONFIG_FILE
+    echo "DISCOVERED_IPV6=" >>$CONFIG_FILE
+    echo "Update_IPV4=false" >>$CONFIG_FILE
+    echo "Update_IPV6=false" >>$CONFIG_FILE
+    echo "" >>$CONFIG_FILE
 
     if [ $SERVICE == "1" ]; then
-        echo "#service to used e.g. Strato, Cloudflare etc." >> $CONFIG_FILE
-        echo "SERVICE=\"Cloudflare\"" >> $CONFIG_FILE
+        echo "#service to used e.g. Strato, Cloudflare etc." >>$CONFIG_FILE
+        echo "SERVICE=\"Cloudflare\"" >>$CONFIG_FILE
     elif [ $SERVICE == "2" ]; then
-        echo "#service to used e.g. Strato, Cloudflare etc." >> $CONFIG_FILE
-        echo "SERVICE=\"Strato\"" >> $CONFIG_FILE
+        echo "#service to used e.g. Strato, Cloudflare etc." >>$CONFIG_FILE
+        echo "SERVICE=\"Strato\"" >>$CONFIG_FILE
     else
         echo "service selection not valid, please start over!"
     fi
 
     if [ "$STACK" == "1" ]; then
-        echo "#stack to be updated" >> $CONFIG_FILE
-        echo "STACK=\"v4\"" >> $CONFIG_FILE
+        echo "#stack to be updated" >>$CONFIG_FILE
+        echo "STACK=\"v4\"" >>$CONFIG_FILE
     elif [ "$STACK" == "2" ]; then
-        echo "#stack to be updated" >> $CONFIG_FILE
-        echo "STACK=\"v6\"" >> $CONFIG_FILE
+        echo "#stack to be updated" >>$CONFIG_FILE
+        echo "STACK=\"v6\"" >>$CONFIG_FILE
     elif [ "$STACK" == "3" ]; then
-        echo "#stack to be updated" >> $CONFIG_FILE
-        echo "STACK=\"DS\"" >> $CONFIG_FILE
+        echo "#stack to be updated" >>$CONFIG_FILE
+        echo "STACK=\"DS\"" >>$CONFIG_FILE
     else
         echo "stack selection not valid, please start over!"
     fi
 
     if [ "$DNS" == "1" ]; then
-        echo "#DNS to dig on" >> $CONFIG_FILE
-        echo "DNS=\"1.1.1.1\"" >> $CONFIG_FILE
+        echo "#DNS to dig on" >>$CONFIG_FILE
+        echo "DNS=\"1.1.1.1\"" >>$CONFIG_FILE
     elif [ "$DNS" == "2" ]; then
-        echo "#DNS to dig on" >> $CONFIG_FILE
-        echo "DNS=\"8.8.8.8\"" >> $CONFIG_FILE
+        echo "#DNS to dig on" >>$CONFIG_FILE
+        echo "DNS=\"8.8.8.8\"" >>$CONFIG_FILE
     elif [ "$DNS" == "3" ]; then
-        echo "#DNS to dig on" >> $CONFIG_FILE
-        echo "DNS=\"212.227.123.16\"" >> $CONFIG_FILE
+        echo "#DNS to dig on" >>$CONFIG_FILE
+        echo "DNS=\"212.227.123.16\"" >>$CONFIG_FILE
     elif [ "$DNS" == "4" ]; then
-        echo "#DNS to dig on" >> $CONFIG_FILE
-        echo "DNS=\"217.5.100.185\"" >> $CONFIG_FILE
+        echo "#DNS to dig on" >>$CONFIG_FILE
+        echo "DNS=\"217.5.100.185\"" >>$CONFIG_FILE
     else
         echo "DNS server not valid, please start over!"
     fi
 
     if [ "$SUBDOMAIN" != "" ]; then
-        echo "#subdomain to be updated" >> $CONFIG_FILE
-        echo "SUBDOMAIN=\"$SUBDOMAIN\"" >> $CONFIG_FILE
+        echo "#subdomain to be updated" >>$CONFIG_FILE
+        echo "SUBDOMAIN=\"$SUBDOMAIN\"" >>$CONFIG_FILE
     else
         echo "subdomain can not be empty, please start over!"
     fi
 
     if [ "$DOMAIN" != "" ]; then
-        echo "#domain or username for update" >> $CONFIG_FILE
-        echo "DOMAIN=\"$DOMAIN\"" >> $CONFIG_FILE
+        echo "#domain or username for update" >>$CONFIG_FILE
+        echo "DOMAIN=\"$DOMAIN\"" >>$CONFIG_FILE
     else
         echo "username can not be empty, please start over!"
     fi
 
     if [ "$PASSWORD" == "$PASSWORD_CHECK" ]; then
-        echo "#password for update" >> $CONFIG_FILE
-        echo "PASSWORD=\"$PASSWORD\"" >> $CONFIG_FILE
+        echo "#password for update" >>$CONFIG_FILE
+        echo "PASSWORD=\"$PASSWORD\"" >>$CONFIG_FILE
     else
         echo "passwords do not match, please start over!"
     fi
