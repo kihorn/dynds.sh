@@ -157,6 +157,7 @@ else
 
     read -s PASSWORD_CHECK
 
+    echo ""
     read -e -p "Would you like to use a cronjob? [Y/n]" CRONSTATUS
 
     if [ "$CRONSTATUS" == "Y" ]; then
