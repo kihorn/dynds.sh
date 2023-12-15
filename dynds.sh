@@ -7,6 +7,37 @@ if [ -f "$CONFIG_FILE" ]; then
 
     echo "debug: $CONFIG_FILE exists"
 
+    # Complete file path
+    FILE=$(readlink --canonicalize --no-newline $BASH_SOURCE)
+    # Check whether the cronjob already exists
+    crontab -l | grep -q $FILE && CRONSTATUS=true && echo 'debug: a cronjob already exist' || CRONSTATUS=false
+
+    # Check if the cronjob has changed
+    CRONJOB=$(crontab -l | grep -i $FILE)
+    if [ "$CRONJOB" == "${CRON} ${FILE}" ]; then
+        echo "debug: cron is up to date"
+        CRONUPDATE=false
+    else
+        echo "debug: cron in the config has changed"
+        CRONUPDATE=true
+    fi
+
+    # Create or update cronjob
+    if [ "$CRONSTATUS" == false ]; then
+        echo "debug: install Cronjob"
+        crontab -l >CRONJOB
+        echo "${CRON}" "${FILE}" >>CRONJOB
+        crontab CRONJOB
+        rm CRONJOB
+    elif [ "$CRONSTATUS" == true ] && [ "$CRONUPDATE" == true ]; then
+        echo "debug: update Cronjob"
+        crontab -l | grep -v $FILE | crontab -
+        crontab -l >CRONJOB
+        echo "${CRON}" "${FILE}" >>CRONJOB
+        crontab CRONJOB
+        rm CRONJOB
+    fi
+
     # Check IPv4
     if [ $STACK == "v4" ] || [ $STACK == "DS" ]; then
 
@@ -126,6 +157,13 @@ else
 
     read -s PASSWORD_CHECK
 
+    read -e -p "Would you like to use a cronjob? [Y/n]" CRONSTATUS
+
+    if [ "$CRONSTATUS" == "Y" ]; then
+        echo ""
+        read -e -p "Cronjob [Default: Every 5 Minutes]: " -i "*/5 * * * *" CRON
+    fi
+
     echo ""
     echo "configuration finished, will update your service with selected stack option:$STACK"
     echo "subdomain to be updated:$SUBDOMAIN using account:$DOMAIN"
@@ -201,6 +239,11 @@ else
         echo "PASSWORD=\"$PASSWORD\"" >>$CONFIG_FILE
     else
         echo "passwords do not match, please start over!"
+    fi
+
+    if [ "$CRON" != "" ]; then
+        echo "#cronjob" >>$CONFIG_FILE
+        echo "CRON=\"$CRON\"" >>$CONFIG_FILE
     fi
 
     clear
