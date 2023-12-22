@@ -3,9 +3,38 @@
 source /etc/dynds.conf
 CONFIG_FILE=/etc/dynds.conf
 
+# Loop through all the command line arguments
+while [[ $# -gt 0 ]]; do
+    case $1 in
+    --cron)
+        CRON_FLAG=true
+        ;;
+    *)
+        # Handle unknown options
+        echo "Unknown option: $1"
+        exit 1
+        ;;
+    esac
+    shift # Move to the next argument
+done
+
 if [ -f "$CONFIG_FILE" ]; then
 
     echo "debug: $CONFIG_FILE exists"
+
+    # Change cronjob
+    if $CRON_FLAG; then
+        echo ""
+        read -e -p "Cronjob [Default: Every 5 Minutes]: " -i "*/5 * * * *" CRON
+        if grep -q "CRON=" "$CONFIG_FILE"; then
+            sed -i "s#^CRON=.*#CRON=\"${CRON}\"#" "$CONFIG_FILE"
+            echo "Cron replaced."
+        else
+            echo "#cronjob" >>$CONFIG_FILE
+            echo "CRON=\"$CRON\"" >>$CONFIG_FILE
+            echo "Cron added."
+        fi
+    fi
 
     # Complete file path
     FILE=$(readlink --canonicalize --no-newline $BASH_SOURCE)
