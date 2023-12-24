@@ -23,7 +23,7 @@ if [ -f "$CONFIG_FILE" ]; then
     echo "debug: $CONFIG_FILE exists"
 
     # Change cronjob
-    if $CRON_FLAG; then
+    if [ "$CRON_FLAG" == true ]; then
         echo ""
         read -e -p "Cronjob [Default: Every 5 Minutes]: " -i "*/5 * * * *" CRON
         if grep -q "CRON=" "$CONFIG_FILE"; then
@@ -39,7 +39,7 @@ if [ -f "$CONFIG_FILE" ]; then
     # Complete file path
     FILE=$(readlink --canonicalize --no-newline $BASH_SOURCE)
     # Check whether the cronjob already exists
-    crontab -l | grep -q $FILE && CRONSTATUS=true && echo 'debug: a cronjob already exist' || CRONSTATUS=false
+    crontab -l | grep -q $FILE && CRONSTATUS=true && echo 'debug: a cronjob exist' || CRONSTATUS=false
 
     # Check if the cronjob has changed
     CRONJOB=$(crontab -l | grep -i $FILE)
@@ -52,13 +52,13 @@ if [ -f "$CONFIG_FILE" ]; then
     fi
 
     # Create or update cronjob
-    if [ "$CRONSTATUS" == false ]; then
+    if [ "$CRONSTATUS" == false ] && [ "$CRON" != "" ]; then
         echo "debug: install Cronjob"
         crontab -l >CRONJOB
         echo "${CRON}" "${FILE}" >>CRONJOB
         crontab CRONJOB
         rm CRONJOB
-    elif [ "$CRONSTATUS" == true ] && [ "$CRONUPDATE" == true ]; then
+    elif [ "$CRONSTATUS" == true ] && [ "$CRONUPDATE" == true ] && [ "$CRON" != "" ]; then
         echo "debug: update Cronjob"
         crontab -l | grep -v $FILE | crontab -
         crontab -l >CRONJOB
