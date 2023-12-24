@@ -46,6 +46,13 @@ if [ -f "$CONFIG_FILE" ]; then
     if [ "$CRONJOB" == "${CRON} ${FILE}" ]; then
         echo "debug: cron is up to date"
         CRONUPDATE=false
+    elif [ "$CRONSTATUS" ] && [ "$CRON" == "" ]; then
+        crontab -l >CRONJOB
+        echo "debug: remove cronjob"
+        sed_file=$(sed 's/[^^]/[&]/g; s/\^/\\^/g' <<<"$FILE")
+        sed -i "\%$sed_file%d" "CRONJOB"
+        crontab CRONJOB
+        rm CRONJOB
     else
         echo "debug: cron in the config has changed"
         CRONUPDATE=true
