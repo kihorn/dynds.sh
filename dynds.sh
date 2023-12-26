@@ -3,136 +3,7 @@
 source /etc/dynds.conf
 CONFIG_FILE=/etc/dynds.conf
 
-# Loop through all the command line arguments
-while [[ $# -gt 0 ]]; do
-    case $1 in
-    --cron)
-        CRON_FLAG=true
-        ;;
-    *)
-        # Handle unknown options
-        echo "Unknown option: $1"
-        exit 1
-        ;;
-    esac
-    shift # Move to the next argument
-done
-
-if [ -f "$CONFIG_FILE" ]; then
-
-    echo "debug: $CONFIG_FILE exists"
-
-    # Change cronjob
-    if [ "$CRON_FLAG" == true ]; then
-        echo ""
-        read -e -p "Cronjob [Default: Every 5 Minutes]: " -i "*/5 * * * *" CRON
-        if grep -q "CRON=" "$CONFIG_FILE"; then
-            sed -i "s#^CRON=.*#CRON=\"${CRON}\"#" "$CONFIG_FILE"
-            echo "Cron replaced."
-        else
-            echo "#cronjob" >>$CONFIG_FILE
-            echo "CRON=\"$CRON\"" >>$CONFIG_FILE
-            echo "Cron added."
-        fi
-    fi
-
-    # Complete file path
-    FILE=$(readlink --canonicalize --no-newline $BASH_SOURCE)
-    # Check whether the cronjob already exists
-    crontab -l | grep -q $FILE && CRONSTATUS=true && echo 'debug: a cronjob exist' || CRONSTATUS=false
-
-    # Check if the cronjob has changed
-    CRONJOB=$(crontab -l | grep -i $FILE)
-    if [ "$CRONJOB" == "${CRON} ${FILE}" ]; then
-        echo "debug: cron is up to date"
-        CRONUPDATE=false
-    elif [ "$CRONSTATUS" ] && [ "$CRON" == "" ]; then
-        crontab -l >CRONJOB
-        echo "debug: remove cronjob"
-        sed_file=$(sed 's/[^^]/[&]/g; s/\^/\\^/g' <<<"$FILE")
-        sed -i "\%$sed_file%d" "CRONJOB"
-        crontab CRONJOB
-        rm CRONJOB
-    else
-        echo "debug: cron in the config has changed"
-        CRONUPDATE=true
-    fi
-
-    # Create or update cronjob
-    if [ "$CRONSTATUS" == false ] && [ "$CRON" != "" ]; then
-        echo "debug: install Cronjob"
-        crontab -l >CRONJOB
-        echo "${CRON}" "${FILE}" >>CRONJOB
-        crontab CRONJOB
-        rm CRONJOB
-    elif [ "$CRONSTATUS" == true ] && [ "$CRONUPDATE" == true ] && [ "$CRON" != "" ]; then
-        echo "debug: update Cronjob"
-        crontab -l | grep -v $FILE | crontab -
-        crontab -l >CRONJOB
-        echo "${CRON}" "${FILE}" >>CRONJOB
-        crontab CRONJOB
-        rm CRONJOB
-    fi
-
-    # Check IPv4
-    if [ $STACK == "v4" ] || [ $STACK == "DS" ]; then
-
-        CURRENT_IPV4="$(curl -4 -s ifconfig.io)"
-        echo "debug: current IPV4 address: $CURRENT_IPV4"
-
-        DISCOVERED_IPV4="$(dig +short $SUBDOMAIN.$DOMAIN A @$DNS)"
-        echo "debug: discovered IPV4 address: $DISCOVERED_IPV4"
-
-        if [ "$DISCOVERED_IPV4" != "$CURRENT_IPV4" ]; then
-            UPDATE_IPV4=true
-            echo "debug: update v4"
-        else
-            UPDATE_IPV4=false
-            echo "debug: no update v4"
-        fi
-    fi
-
-    # Check IPv6
-    if [ $STACK == "v6" ] || [ $STACK == "DS" ]; then
-
-        CURRENT_IPV6="$(curl -6 -s ifconfig.io)"
-        echo "debug: current IPV6 address: $CURRENT_IPV6"
-
-        DISCOVERED_IPV6="$(dig +short $SUBDOMAIN.$DOMAIN AAAA @$DNS)"
-        echo "debug: discovered IPV6 address: $DISCOVERED_IPV6"
-
-        if [ "$DISCOVERED_IPV6" != "$CURRENT_IPV6" ]; then
-            UPDATE_IPV6=true
-            echo "debug: update v6"
-        else
-            UPDATE_IPV6=false
-            echo "debug: no update v6"
-        fi
-    fi
-
-    # Update DNS
-    if [ $STACK == "v4" ] && [ $UPDATE_IPV4 == true ]; then
-
-        RESULT="$(curl --silent --show-error "https://$DOMAIN:$PASSWORD@dyndns.strato.com/nic/update?hostname=$SUBDOMAIN.$DOMAIN&myip=$CURRENT_IPV4")"
-        echo "debug: v4 update result: "$RESULT
-
-    elif [ $STACK == "v6" ] && [ $UPDATE_IPV6 == true ]; then
-
-        RESULT="$(curl --silent --show-error "https://$DOMAIN:$PASSWORD@dyndns.strato.com/nic/update?hostname=$SUBDOMAIN.$DOMAIN&myip=$CURRENT_IPV6")"
-        echo "debug: v6 update result: "$RESULT
-
-    elif [ $STACK == "DS" ] && ([ $UPDATE_IPV4 == true ] || [ $UPDATE_IPV6 == true ]); then
-
-        RESULT="$(curl --silent --show-error "https://$DOMAIN:$PASSWORD@dyndns.strato.com/nic/update?hostname=$SUBDOMAIN.$DOMAIN&myip=$CURRENT_IPV4,$CURRENT_IPV6")"
-        echo "debug: dual stack update result: "$RESULT
-
-    else
-
-        echo "debug: there was an error updating your dynamic DNS"
-
-    fi
-
-else
+function generateConfig() {
 
     clear
 
@@ -177,7 +48,7 @@ else
     echo "please enter the subdomain to be updated"
     echo "   use . for delimiting deeper levels"
 
-    read SUBDOMAIN
+    read -i $SUBDOMAIN SUBDOMAIN
 
     echo ""
     echo "please enter your username or domain for login to the service"
@@ -287,4 +158,152 @@ else
     echo ""
     echo "configuration file saved, you can run the script now!"
     echo ""
+}
+
+function checkIP() {
+    # Check IPv4
+    if [ $STACK == "v4" ] || [ $STACK == "DS" ]; then
+
+        CURRENT_IPV4="$(curl -4 -s ifconfig.io)"
+        echo "debug: current IPV4 address: $CURRENT_IPV4"
+
+        DISCOVERED_IPV4="$(dig +short $SUBDOMAIN.$DOMAIN A @$DNS)"
+        echo "debug: discovered IPV4 address: $DISCOVERED_IPV4"
+
+        if [ "$DISCOVERED_IPV4" != "$CURRENT_IPV4" ]; then
+            UPDATE_IPV4=true
+            echo "debug: update v4"
+        else
+            UPDATE_IPV4=false
+            echo "debug: no update v4"
+        fi
+    fi
+
+    # Check IPv6
+    if [ $STACK == "v6" ] || [ $STACK == "DS" ]; then
+
+        CURRENT_IPV6="$(curl -6 -s ifconfig.io)"
+        echo "debug: current IPV6 address: $CURRENT_IPV6"
+
+        DISCOVERED_IPV6="$(dig +short $SUBDOMAIN.$DOMAIN AAAA @$DNS)"
+        echo "debug: discovered IPV6 address: $DISCOVERED_IPV6"
+
+        if [ "$DISCOVERED_IPV6" != "$CURRENT_IPV6" ]; then
+            UPDATE_IPV6=true
+            echo "debug: update v6"
+        else
+            UPDATE_IPV6=false
+            echo "debug: no update v6"
+        fi
+    fi
+}
+
+function dyndnsCF() {
+
+    # Update DNS
+}
+
+function dyndnsStrato() {
+
+    # Update DNS
+    if [ $STACK == "v4" ] && [ $UPDATE_IPV4 == true ]; then
+        RESULT="$(curl --silent --show-error "https://$DOMAIN:$PASSWORD@dyndns.strato.com/nic/update?hostname=$SUBDOMAIN.$DOMAIN&myip=$CURRENT_IPV4")"
+        echo "debug: v4 update result: "$RESULT
+
+    elif [ $STACK == "v6" ] && [ $UPDATE_IPV6 == true ]; then
+        RESULT="$(curl --silent --show-error "https://$DOMAIN:$PASSWORD@dyndns.strato.com/nic/update?hostname=$SUBDOMAIN.$DOMAIN&myip=$CURRENT_IPV6")"
+        echo "debug: v6 update result: "$RESULT
+
+    elif [ $STACK == "DS" ] && ([ $UPDATE_IPV4 == true ] || [ $UPDATE_IPV6 == true ]); then
+        RESULT="$(curl --silent --show-error "https://$DOMAIN:$PASSWORD@dyndns.strato.com/nic/update?hostname=$SUBDOMAIN.$DOMAIN&myip=$CURRENT_IPV4,$CURRENT_IPV6")"
+        echo "debug: dual stack update result: "$RESULT
+    else
+        echo "debug: there was an error updating your dynamic DNS"
+
+    fi
+}
+
+function checkCron() {
+    # Complete file path
+    FILE=$(readlink --canonicalize --no-newline $BASH_SOURCE)
+    # Check whether the cronjob already exists
+    crontab -l | grep -q $FILE && CRONSTATUS=true && echo 'debug: a cronjob exist' || CRONSTATUS=false
+
+    # Check if the cronjob has changed
+    CRONJOB=$(crontab -l | grep -i $FILE)
+    if [ "$CRONJOB" == "${CRON} ${FILE}" ]; then
+        echo "debug: cron is up to date"
+        CRONUPDATE=false
+    elif [ "$CRONSTATUS" ] && [ "$CRON" == "" ]; then
+        crontab -l >CRONJOB
+        echo "debug: remove cronjob"
+        sed_file=$(sed 's/[^^]/[&]/g; s/\^/\\^/g' <<<"$FILE")
+        sed -i "\%$sed_file%d" "CRONJOB"
+        crontab CRONJOB
+        rm CRONJOB
+    else
+        echo "debug: cron in the config has changed"
+        CRONUPDATE=true
+    fi
+
+    # Create or update cronjob
+    if [ "$CRONSTATUS" == false ] && [ "$CRON" != "" ]; then
+        echo "debug: install Cronjob"
+        crontab -l >CRONJOB
+        echo "${CRON}" "${FILE}" >>CRONJOB
+        crontab CRONJOB
+        rm CRONJOB
+    elif [ "$CRONSTATUS" == true ] && [ "$CRONUPDATE" == true ] && [ "$CRON" != "" ]; then
+        echo "debug: update Cronjob"
+        crontab -l | grep -v $FILE | crontab -
+        crontab -l >CRONJOB
+        echo "${CRON}" "${FILE}" >>CRONJOB
+        crontab CRONJOB
+        rm CRONJOB
+    fi
+}
+
+function changeCron() {
+    echo ""
+    read -e -p "Cronjob [Default: Every 5 Minutes]: " -i "*/5 * * * *" CRON
+    if grep -q "CRON=" "$CONFIG_FILE"; then
+        sed -i "s#^CRON=.*#CRON=\"${CRON}\"#" "$CONFIG_FILE"
+        echo "Cron replaced."
+    else
+        echo "#cronjob" >>$CONFIG_FILE
+        echo "CRON=\"$CRON\"" >>$CONFIG_FILE
+        echo "Cron added."
+    fi
+}
+
+# Loop through all the command line arguments
+while [[ $# -gt 0 ]]; do
+    case $1 in
+    --cron)
+        changeCron
+        ;;
+    *)
+        # Handle unknown options
+        echo "Unknown option: $1"
+        exit 1
+        ;;
+    esac
+    shift # Move to the next argument
+done
+
+if [ -f "$CONFIG_FILE" ]; then
+    echo "debug: $CONFIG_FILE exists"
+    checkCron
+    checkIP
+
+    case $SERVICE in
+    Cloudflare)
+        dyndnsCF
+        ;;
+    Strato)
+        dyndnsStrato
+        ;;
+    esac
+else
+    generateConfig
 fi
