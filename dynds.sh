@@ -46,18 +46,29 @@ function generateConfig() {
     read SUBDOMAIN
 
     echo ""
-    echo "please enter your username or domain for login to the service"
+    echo "please enter your domain"
 
     read DOMAIN
 
-    echo ""
-    echo "please enter your dynamic DNS password"
+    if [ "$SERVICE" == "2" ]; then
+        echo ""
+        echo "please enter your dynamic DNS password"
 
-    read -s PASSWORD
+        read -s PASSWORD
 
-    echo "please enter your dynamic DNS password again"
+        echo "please enter your dynamic DNS password again"
 
-    read -s PASSWORD_CHECK
+        read -s PASSWORD_CHECK
+
+    elif [ "$SERVICE" == "1" ]; then
+        echo ""
+        echo "please enter your Cloudflare-Email"
+        read CF_API_EMAIL
+
+        echo ""
+        echo "please enter your Cloudflare-API-Key"
+        read CF_API_KEY
+    fi
 
     echo ""
     read -e -p "Would you like to use a cronjob? [Y/n]" CRONSTATUS
@@ -140,11 +151,18 @@ function generateConfig() {
         echo "username can not be empty, please start over!"
     fi
 
-    if [ "$PASSWORD" == "$PASSWORD_CHECK" ]; then
-        echo "#password for update" >>$CONFIG_FILE
-        echo "PASSWORD=\"$PASSWORD\"" >>$CONFIG_FILE
-    else
-        echo "passwords do not match, please start over!"
+    if [ $SERVICE == "1" ]; then
+        echo "#cloudflare API Email"
+        echo "CF_API_EMAIL=\"$CF_API_EMAIL\"" >>$CONFIG_FILE
+        echo "#cloudflare API Key"
+        echo "CF_API_KEY=\"$CF_API_KEY\"" >>$CONFIG_FILE
+    elif [ $SERVICE == "2" ]; then
+        if [ "$PASSWORD" == "$PASSWORD_CHECK" ]; then
+            echo "#password for update" >>$CONFIG_FILE
+            echo "PASSWORD=\"$PASSWORD\"" >>$CONFIG_FILE
+        else
+            echo "passwords do not match, please start over!"
+        fi
     fi
 
     if [ "$CRON" != "" ]; then
@@ -198,7 +216,69 @@ function checkIP() {
 
 function dyndnsCF() {
 
-    # Update DNS
+    if [ "$UPDATE_IPV4" == true ] || [ "$UPDATE_IPV6" == true ]; then
+        # Get Zone ID
+        CF_ZONE_ID=$(
+            curl -s -X GET "https://api.cloudflare.com/client/v4/zones?name=$DOMAIN&status=active" \
+                -H "Authorization: Bearer $CF_API_KEY" \
+                -H "X-Auth-Email: $CF_API_EMAIL" \
+                -H "Content-Type: application/json" | jq -r '.result[0].id'
+        )
+
+        # Get Record ID
+        CF_RECORD_ID_IPV4=$(
+            curl -s -X GET "https://api.cloudflare.com/client/v4/zones/$CF_ZONE_ID/dns_records?type=A&name=$SUBDOMAIN.$DOMAIN" \
+                -H "Authorization: Bearer $CF_API_KEY" \
+                -H "Content-Type: application/json" | jq -r '.result[0].id'
+        )
+    fi
+    # Update IPv4
+    if [[ ($STACK == "v4" || $STACK == "DS") && $UPDATE_IPV4 == true ]]; then
+        # Get Record ID
+        CF_RECORD_ID_IPV4=$(
+            curl -s -X GET "https://api.cloudflare.com/client/v4/zones/$CF_ZONE_ID/dns_records?type=A&name=$SUBDOMAIN.$DOMAIN" \
+                -H "Authorization: Bearer $CF_API_KEY" \
+                -H "Content-Type: application/json" | jq -r '.result[0].id'
+        )
+
+        # Update DNS
+        RESULTV4=$(
+            curl -s -X PUT "https://api.cloudflare.com/client/v4/zones/$CF_ZONE_ID/dns_records/$CF_RECORD_ID_IPV4" \
+                -H "Authorization: Bearer $CF_API_KEY" \
+                -H "Content-Type: application/json" \
+                --data "{\"type\":\"A\",\"name\":\"$SUBDOMAIN\",\"content\":\"$CURRENT_IPV4\",\"ttl\":1,\"proxied\":false}"
+        )
+    fi
+    echo "$RESULTV4"
+    # Update IPv6
+    if [[ ($STACK == "v6" || $STACK == "DS") && $UPDATE_IPV6 == true ]]; then
+        # Get Record ID
+        CF_RECORD_ID_IPV6=$(
+            curl -s -X GET "https://api.cloudflare.com/client/v4/zones/$CF_ZONE_ID/dns_records?type=AAAA&name=$SUBDOMAIN.$DOMAIN" \
+                -H "Authorization: Bearer $CF_API_KEY" \
+                -H "Content-Type: application/json" | jq -r '.result[0].id'
+        )
+
+        # Update DNS
+        RESULTV6=$(
+            curl -s -X PUT "https://api.cloudflare.com/client/v4/zones/$CF_ZONE_ID/dns_records/$CF_RECORD_ID_IPV6" \
+                -H "Authorization: Bearer $CF_API_KEY" \
+                -H "Content-Type: application/json" \
+                --data "{\"type\":\"AAAA\",\"name\":\"$SUBDOMAIN\",\"content\":\"$CURRENT_IPV6\",\"ttl\":1,\"proxied\":false}"
+        )
+    fi
+    echo "$RESULTV6"
+    # Check Update
+    if [ "$RESULTV4" == *"\"success\":false"* ]; then
+        echo "$RESULTV4"
+        echo "debug: there was an error updating your dynamic DNS"
+    fi
+
+    if [ "$RESULTV6" == *"\"success\":false"* ]; then
+        echo "$RESULTV6"
+        echo "debug: there was an error updating your dynamic DNS"
+    fi
+
 }
 
 function dyndnsStrato() {
