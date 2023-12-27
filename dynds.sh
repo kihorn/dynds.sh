@@ -1,7 +1,5 @@
 #!/bin/bash
-
-source /etc/dynds.conf
-CONFIG_FILE=/etc/dynds.conf
+CONFIG_PATH=/etc/dynds.conf
 
 function generateConfig() {
 
@@ -12,9 +10,6 @@ function generateConfig() {
         echo "Error: User does not have sufficient rights to read the existing configuration file or create a new one."
         exit 1
     fi
-
-    # Create Config File
-    touch /etc/dynds.conf
 
     echo "Welcome to DynDS client installer!"
     echo ""
@@ -48,7 +43,7 @@ function generateConfig() {
     echo "please enter the subdomain to be updated"
     echo "   use . for delimiting deeper levels"
 
-    read -i $SUBDOMAIN SUBDOMAIN
+    read SUBDOMAIN
 
     echo ""
     echo "please enter your username or domain for login to the service"
@@ -77,6 +72,9 @@ function generateConfig() {
     echo "subdomain to be updated:$SUBDOMAIN using account:$DOMAIN"
     echo ""
     echo "saving to config file now"
+
+    # Create Config File
+    touch $CONFIG_PATH
 
     echo "#DynDS config created on $(date)" >>$CONFIG_FILE
     echo "" >>$CONFIG_FILE
@@ -219,7 +217,6 @@ function dyndnsStrato() {
         echo "debug: dual stack update result: "$RESULT
     else
         echo "debug: there was an error updating your dynamic DNS"
-
     fi
 }
 
@@ -280,7 +277,11 @@ function changeCron() {
 while [[ $# -gt 0 ]]; do
     case $1 in
     --cron)
-        changeCron
+        CRON_FLAG=true
+        ;;
+    --configfile)
+        CONFIG_PATH="$2"
+        shift
         ;;
     *)
         # Handle unknown options
@@ -291,7 +292,15 @@ while [[ $# -gt 0 ]]; do
     shift # Move to the next argument
 done
 
+source $CONFIG_PATH
+CONFIG_FILE=$CONFIG_PATH
+
 if [ -f "$CONFIG_FILE" ]; then
+
+    if [ "$CRON_FLAG" == true ]; then
+        changeCron
+    fi
+
     echo "debug: $CONFIG_FILE exists"
     checkCron
     checkIP
